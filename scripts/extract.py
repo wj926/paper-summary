@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """
-PDF -> raw.md + figures/ extractor (phase 1 of paper-summary skill).
+PDF -> raw.md + figures/ extractor (phase B of paper-summary skill).
 
 Usage:
-    python extract.py <pdf_path> <out_dir>
+    python extract.py <pdf_path> <out_dir>        # full extraction
+    python extract.py --metadata-only <pdf_path>  # just print meta, exit
 
-Outputs under <out_dir>:
+Full mode outputs under <out_dir>:
     raw.md                         full text per page + figure embeds
     figures/figN.png               main figures (renumbered 1..)
     figures/figAN.png              appendix figures (renumbered A1..)
     figures/_pages/p-NN.png        full-page renders (200dpi), kept as
                                    source for manual re-cropping
+
+--metadata-only prints key=value lines to stdout so the caller (phase A)
+can decide the final folder name before any extraction work:
+    title=...
+    author=...
+    pages=N
+    arxiv=YYMM.NNNNN[vX]  (if detectable on page 1)
+    first_page_head=...   (first ~400 chars of page 1, helps venue guess)
 """
 
 from __future__ import annotations
@@ -294,11 +303,36 @@ def extract(pdf_path: Path, out_dir: Path) -> None:
     print(f"[done] figures -> {fig_dir} ({main_n} main, {appx_n} appendix)")
 
 
+def print_metadata(pdf_path: Path) -> None:
+    """Print enough info for phase A (LLM) to pick a folder name:
+    title, author, pages, arxiv id (if any), first-page head."""
+    doc = fitz.open(str(pdf_path))
+    meta = doc.metadata or {}
+    print(f"title={(meta.get('title') or '').strip()}")
+    print(f"author={(meta.get('author') or '').strip()}")
+    print(f"pages={doc.page_count}")
+    first_text = doc[0].get_text("text") if doc.page_count else ""
+    m = re.search(r"arXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)", first_text)
+    if m:
+        print(f"arxiv={m.group(1)}")
+    # first ~400 chars of page 1, newlines replaced so it stays one line
+    head = " ".join(first_text.split())[:400]
+    print(f"first_page_head={head}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("pdf")
-    ap.add_argument("out_dir")
+    ap.add_argument("out_dir", nargs="?", default=None,
+                    help="output directory (required unless --metadata-only)")
+    ap.add_argument("--metadata-only", action="store_true",
+                    help="print title/author/arxiv/first-page head and exit")
     args = ap.parse_args()
+    if args.metadata_only:
+        print_metadata(Path(args.pdf))
+        return
+    if args.out_dir is None:
+        ap.error("out_dir is required unless --metadata-only is given")
     extract(Path(args.pdf), Path(args.out_dir))
 
 

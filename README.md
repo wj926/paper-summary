@@ -2,7 +2,7 @@
 
 > 논문 PDF 한 편을 **검색·재독·인용에 최적화된 세 파일**로 나눠 정리하는 Claude Code skill.
 >
-> Phase 1 은 Python (PyMuPDF) 로 LLM 토큰 **0**, Phase 2 만 LLM 을 쓴다. 새 PDF 하나당 LLM 비용은 summary 작성 한 번뿐.
+> Phase B 는 Python (PyMuPDF) 로 LLM 토큰 **0**. Phase A 에서 폴더명을 먼저 확정하고 Phase C 에서 요약을 쓴다 — 임시 이름 (`_tmp`) 을 거치지 않아 rename 을 까먹을 일이 없다.
 
 ## 산출물
 
@@ -10,11 +10,11 @@
 
 | 파일 | 언제 열어봄 | 생성 주체 |
 |------|------------|---------|
-| `abstract.md` | 서치할 때 관련성만 수십 초에 판단 | LLM (phase 2) |
-| `summary.md` | 앞으로의 Q&A / 논의의 1차 소스 — 메타, TL;DR, Glossary, Section 상세 (수식 · Table · Figure embed 포함) | LLM (phase 2) |
-| `raw.md` | summary 에 빠진 게 있을 때만 참조 (PDF 재독 대체) | Python (phase 1) |
-| `figures/figN.png`, `figures/figAN.png` | main / appendix figure 크롭 | Python (phase 1) |
-| `figures/_pages/p-NN.png` | 200dpi 페이지 원본, figure 크롭이 이상할 때 수동 재크롭용 | Python (phase 1) |
+| `abstract.md` | 서치할 때 관련성만 수십 초에 판단 | LLM (phase C) |
+| `summary.md` | 앞으로의 Q&A / 논의의 1차 소스 — 메타, TL;DR, Glossary, Section 상세 (수식 · Table · Figure embed 포함) | LLM (phase C) |
+| `raw.md` | summary 에 빠진 게 있을 때만 참조 (PDF 재독 대체) | Python (phase B) |
+| `figures/figN.png`, `figures/figAN.png` | main / appendix figure 크롭 | Python (phase B) |
+| `figures/_pages/p-NN.png` | 200dpi 페이지 원본, figure 크롭이 이상할 때 수동 재크롭용 | Python (phase B) |
 
 ## 왜 이렇게 쪼갰나
 
@@ -46,17 +46,26 @@ Claude Code 세션에서 자연어로 호출.
 이 PDF paper-summary 로 정리해줘: /path/to/paper.pdf
 ```
 
-또는 Python 으로 phase 1 만 직접 실행 (raw.md + figures 만 필요할 때):
+또는 Python 으로 phase B 만 직접 실행 (raw.md + figures 만 필요할 때):
 
 ```bash
 python3 ~/.claude/skills/paper-summary/scripts/extract.py <pdf_path> <out_dir>
 ```
 
-## 흐름 (3 phase)
+PDF metadata 만 빠르게 확인하려면:
 
-1. **Phase 1 — Python 추출 (토큰 0)**. `extract.py` 가 PDF 를 열어 페이지를 200dpi 로 덤프, 본문 텍스트와 figure caption 을 분석, embedded image + vector drawing bbox 를 합쳐 figure 를 크롭한다. main / appendix 경계는 독립 heading (`References`, `Appendix <id>`) 만 인식해 문장 내부 언급에 오탐하지 않는다.
-2. **Phase 2 — LLM 요약**. Claude 가 `raw.md` 를 읽고 `references/summary_rules.md` 의 규칙을 따라 `summary.md` 와 `abstract.md` 를 작성한다. 두 파일의 메타·원문·번역은 동일 문구로 유지.
-3. **Phase 3 — 폴더 정리**. 논문 폴더명을 `<N>_<firstauthor><year><METHOD>(<venue><year>)` 형식으로 확정하고, 프로젝트 `PAPERS.md` 인덱스에 행을 추가한다. preprint 는 Google 에서 논문 제목을 검색해 accept 된 학회를 먼저 확인한다.
+```bash
+python3 ~/.claude/skills/paper-summary/scripts/extract.py --metadata-only <pdf_path>
+```
+
+## 흐름 (4 phase, 순서 중요)
+
+1. **Phase A — metadata 확인 + 폴더명 확정 (LLM)**. `extract.py --metadata-only` 로 title / author / pages / arxiv id / 첫 페이지 머리글을 뽑는다. 여기서 venue 를 판별하고 (PDF 에 없으면 Google 검색), 폴더명 `<N>_<firstauthor><year><METHOD>(<venue><year>)` 을 확정해 해당 폴더를 만든다.
+2. **Phase B — Python 추출 (토큰 0)**. Phase A 에서 만든 폴더를 `out_dir` 로 넘겨 `extract.py` 실행. PDF 를 200dpi 로 덤프하고 본문 텍스트 + figure caption 을 분석, embedded image + vector drawing bbox 를 합쳐 figure 를 크롭한다. main / appendix 경계는 독립 heading (`References`, `Appendix <id>`) 만 인식해 문장 내부 언급에 오탐하지 않는다.
+3. **Phase C — LLM 요약**. `raw.md` 를 읽고 `references/summary_rules.md` 의 규칙을 따라 `summary.md` 와 `abstract.md` 를 작성한다. 두 파일의 메타·원문·번역은 동일 문구로 유지.
+4. **Phase D — PAPERS.md 업데이트**. 프로젝트 `PAPERS.md` 인덱스 표에 행을 추가 (폴더 링크 + 카테고리 + 한 줄 핵심 연결점).
+
+왜 Phase A 가 맨 앞? — 폴더명을 **Phase B 시작 전에** 결정해두면 `_tmp1` 같은 임시 이름을 쓰고 나중에 rename 하다가 까먹는 사고가 원천 차단된다.
 
 ## 폴더명 규칙
 
