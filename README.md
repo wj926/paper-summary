@@ -1,17 +1,27 @@
 # paper-summary
 
-> 논문 PDF 한 편을 **검색·재독·인용에 최적화된 세 파일**로 나눠 정리하는 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill.
+> 논문 PDF 를 **사람이 쉽게 이해·서치·재독할 수 있는 3 파일**로 나눠 정리하는 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-skill-orange.svg)
 
-PDF 하나를 받으면 Claude 가 4 phase 로 나눠서:
+## 철학
 
-- 폴더명을 `N_authorYEARMETHOD(venueYEAR)` 형식으로 먼저 확정하고
-- **Python(PyMuPDF)** 로 전문 + figure 를 크롭 (**LLM 토큰 0**)
-- **LLM** 이 사실 기반 `summary.md` + 짧은 `abstract.md` 를 작성
-- 프로젝트 `PAPERS.md` 인덱스까지 업데이트
+연구실에 논문은 계속 쌓인다. 한 편을 제대로 쓰려면:
+
+1. **PDF 원문을 자동 추출기로 뽑는다** — Python (PyMuPDF) 이 본문 + figure 까지 긁어 `raw.md` 로 저장. LLM 토큰 0.
+2. **LLM 이 그 원문을 사람이 이해하기 쉬운 형태로 요약**한다 — `summary.md` (수식 · Table · figure embed 포함 상세 요약) 와 `abstract.md` (메타 + 초록 + 한글 번역).
+
+이렇게 만들어진 **3 파일은 각자 다른 용도**다.
+
+| 파일 | 언제 쓰나 |
+|------|-----------|
+| **`summary.md`** ★ | **사람이 메인으로 읽는 파일.** 논문을 제대로 이해하거나, 향후 연구에 새로운 관점을 얻고 싶을 때 가장 먼저 연다. |
+| **`abstract.md`** | 논문이 수십·수백 편 쌓였을 때 **LLM 에게 "이 중에서 X 와 관련된 거 찾아줘" 를 빠르게 시킬 때**의 index. |
+| **`raw.md`** | summary 만 보고 이해가 안 될 때 참조하는 **원문 백업**. 사람은 평소에 안 연다. |
+
+figure 는 `figures/figN.png` (main) 과 `figures/figAN.png` (appendix) 로 크롭 저장되고 `summary.md` 안에 embed 되어 있다. `figures/_pages/p-NN.png` 는 200dpi 페이지 원본으로, 자동 크롭이 실패한 경우 수동 재크롭용.
 
 ## 흐름
 
@@ -24,19 +34,7 @@ flowchart LR
     A --> B --> C --> D
 ```
 
-Phase 순서가 중요합니다 — **폴더명을 Phase A 에서 먼저 확정**해서 Phase B 가 정확한 경로에 쓰도록. `_tmp1` 같은 임시 이름을 거쳐 나중에 rename 을 까먹는 실수를 원천 차단.
-
-## 산출물
-
-한 PDF 당 `<folder>/` 아래에 다음이 쌓입니다.
-
-| 파일 | 언제 열어봄 | 생성 주체 |
-|------|------------|---------|
-| **`abstract.md`** | 수십 초 안에 관련성만 판단 — 서치·훑어보기용 | LLM (Phase C) |
-| **`summary.md`** | Q&A / 논의의 1차 소스 — 메타, TL;DR, Glossary, Section 상세, 수식, Table, figure embed | LLM (Phase C) |
-| **`raw.md`** | summary 가 놓친 디테일 재확인 — PDF 재독 대체 | Python (Phase B) |
-| `figures/figN.png`, `figures/figAN.png` | main / appendix figure 크롭 | Python (Phase B) |
-| `figures/_pages/p-NN.png` | 200dpi 페이지 원본 — figure 크롭이 이상할 때 수동 재크롭용 | Python (Phase B) |
+Phase 순서가 중요하다 — **폴더명을 Phase A 에서 먼저 확정**해서 Phase B 가 정확한 경로에 쓰도록. `_tmp1` 같은 임시 이름을 거쳐 나중에 rename 을 까먹는 실수를 원천 차단.
 
 ## Examples
 
